@@ -1,0 +1,85 @@
+环境：
+	linux：centos6.8
+	jdk	 ：jdk-7u80-linux-x64.rpm
+	hadoop：hadoop-2.6.4.tar.gz
+	eclipse插件：hadoop-clipse-plugin-2.6.0
+	ssh连接工具：xshell 6
+Linux配置：
+	1.重启服务：service network restart
+	2.修改配置文件：/etc/sysconfig/network-scripts/ifcfg-eth0
+		ONBOOT=yes、BOOTPROTO=static、添加以下内容：
+			IPADDR=192.168.128.130
+			NETMASK=255.255.255.0
+			GATEWAY=192.168.128.2
+			DNS1=192.168.128.2
+	3.service network restart
+	4.配置yum
+		配置源：保留一个CentOS-Media-repo:
+			baseurl=file:///media/
+			gpgcheck=0
+			enabled=1
+		可能需要在虚拟机将CD/DVD的设备状态选中已连接
+		mount /dev/dvd /media/	--  挂载
+		yum clean all			--	更新源
+		yum install -y vim zip openssh-server openssh-clients
+安装Java和Hadoop：
+	rpm -ivh jdk...
+	tar -zxvf hadoop... -C /usr/local	解压到指定目录
+	修改7个配置文件：
+	1）core-site.xml
+	<cofiguration>
+		<property>
+		<!-- fs.defaultFs 配置了Hadoop的HDFS系统的命名，位置为主机的8020端口 -->
+			<name>fs.defaultFs</name>
+			<value>hdfs://master:8020</value>
+		</property>
+		<property>
+		<!-- 配置hadoop临时文件的位置 -->
+			<name>hadoop.tmp.dir</name>
+			<value>/var/log/hadoop/tmp</value>
+		</property>
+	</configuration>
+	2)hadoop-env.sh
+		hadoop的基本环境配置--修改JDK的实际位置
+	3)yarn-env.sh
+		YARN框架运行环境的配置 同上
+	4)mapred-site.xml
+		配置MapReduce任务的日志相关服务
+	5)yarn-site.xml
+		具体配置
+	6)slaves
+		保存有slave节点信息
+	7)hdfs-site.xml
+		指定NameNode元数据和DataNode数据存储位置，SecondaryNameNode地址
+		dfs.replication配置文件块的副本树默认为3
+克隆master配置slave：
+	1.rm -rf /etc/udev/rules.d/70...
+	2.执行 ifconfig -a 记录下MAC地址
+	3.修改 /etc/sysconfig/network-scripts/ifcfg-eth0
+		注释掉UUID
+		修改HWADDR
+	4.vim /etc/sysconfig/network 修改主机名为slave1.centos.com
+	6.reboot 重启
+配置 master 免密登录 slave：
+	ssh-keygen -t rsa
+	ssh-copy-id /root/.ssh/id_rsa.pub master (slave) //依次输入yes，密码
+配置时间同步：
+	1.yum install -y ntp
+	2.vi /etc/ntp.conf //master节点 --> 注释掉以server开头的行，并添加以下代码：
+		restrict 192.168.0.0 mask 255.255.255.0 nomodify notrap
+		server 127.127.1.0
+		fudge 127.127.1.0 stratum 10
+		(salve 注释掉以server开头的行 添加 server master即可)
+	3.service iptables stop & chkconfig iptables off //永久关闭防火墙
+	4.在master节点上 ：service ntpd start & chkconfig ntpd on //永久开启ntp服务
+		slave 节点： ntpdate master 即可与master 同步时间
+		slave: service ntpd start & chkconfig ntpd on //永久开启ntp服务
+配置环境变量：
+	vi /etc/profile //在文件末尾添加
+		export HADOOP_HOME=/usr/local/hadoop-2.6.4
+		export PATH=$HADOOP_HOME/bin:/usr/java/jdk1.7.0_80/bin:$PATH
+集群启动与关闭：
+	cd $HADOOP_HOME
+	sbin/start-dfs.sh			//启动HDFS相关服务
+	sbin/start-yarn.sh			//启动YARN相关服务
+	sbin/mr-jobhistory-daemon.sh start historyserver	//启动日志相关服务
